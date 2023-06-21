@@ -7,7 +7,7 @@ Turned out that I got 47 out of 100. Lol
 ## Usage
 1. install requirements  
    `pip install -r requirements`
-2. run main.py
+2. run main.py  
    `python main.py`
 
 You can change the extension from .py to .pyw and there will be no console output.  
