@@ -5,16 +5,17 @@ import torch
 import time
 import threading
 import math
+import turtle
 
 window_handle = win32gui.FindWindow(None, "Apex Legends")
 if window_handle == None:
     print("Apex window not found")
     exit(1)
 
+# Constants
 WINDOW_RECT = win32gui.GetWindowRect(window_handle)
-WINDOW_SIZE = (WINDOW_RECT[2] - WINDOW_RECT[0], WINDOW_RECT[3] - WINDOW_RECT[1])
-
-# CONSTANTS
+WINDOW_SIZE = (WINDOW_RECT[2] - WINDOW_RECT[0],
+               WINDOW_RECT[3] - WINDOW_RECT[1])
 CAPTURE_SIZE = 320
 HEAD = 0.7
 AIM_THRESHOLD = 0
@@ -27,12 +28,9 @@ FPS = 75
 FOV = 110
 SENSITIVE = 3.0
 
-
 CAMERA_TO_SCREEN = int(abs(WINDOW_SIZE[0] / 2 / math.tan(FOV / 2)))
 CENTER = (CAPTURE_SIZE // 2, CAPTURE_SIZE // 2)
 
-
-# control vars
 head_var = None
 move_speed_var = None
 aim_threshold_var = None
@@ -55,17 +53,18 @@ running = False
 def getNearest(points, current):
     min_dist = 10000000000
     target = points[0]
-    for i in range(len(points)):
-        dist = (points[i][0] - current[0]) ** 2 + (points[i][1] - current[1]) ** 2
+    for point in points:
+        dist = (point[0] - current[0])**2 + (point[1] - current[1])**2
         if dist < min_dist:
             min_dist = dist
-            target = points[i]
+            target = point
     return target
 
 
 def calcMouseMovePx(dx, dy):
     angle_x = math.atan(dx / CAMERA_TO_SCREEN)
     angle_y = math.atan(dy / CAMERA_TO_SCREEN)
+    
     return angle_x * ONE_DEGREE_MOVEPX_X, angle_y * ONE_DEGREE_MOVEPX_Y
 
 
@@ -76,7 +75,6 @@ def detect():
         (WINDOW_RECT[0] + WINDOW_RECT[2]) // 2 + CAPTURE_SIZE // 2,
         (WINDOW_RECT[1] + WINDOW_RECT[3]) // 2 + CAPTURE_SIZE // 2,
     )
-    left, top = capture_region[0], capture_region[1]
 
     camera.start(target_fps=FPS, region=capture_region)
 
@@ -84,8 +82,8 @@ def detect():
         if not running:
             break
 
-        frame = camera.get_latest_frame()
-        if not win32api.GetKeyState(0x02) < 0:  # right button down
+        if not win32api.GetKeyState(0x02) < 0:
+            draw.clear()
             time.sleep(0.001)
             continue
 
@@ -94,6 +92,7 @@ def detect():
             time.sleep(0.001)
             continue
 
+        frame = camera.get_latest_frame()
         detections = model(frame, size=CAPTURE_SIZE)
 
         if not detections.xyxy[0].shape[0]:
@@ -101,27 +100,30 @@ def detect():
 
         detections = detections.xyxy[0].cpu().numpy().astype(int)
         targets = []
-        for i in range(len(detections)):
-            if (detections[i][2] - detections[i][0]) / CAPTURE_SIZE < aim_threshold_var.get():
+        for detection in detections:
+            if (detection[2] -
+                    detection[0]) / CAPTURE_SIZE < aim_threshold_var.get():
                 continue
-            targets.append([
-                (detections[i][0] + detections[i][2]) >> 1,
-                int((detections[i][1] * head_var.get() + detections[i][3] * (1 - head_var.get())))
-            ])
-        
+            targets.append([(detection[0] + detection[2]) >> 1,
+                            int((detection[1] * head_var.get() + detection[3] *
+                                 (1 - head_var.get())))])
+
         if not len(targets):
             continue
 
         target = getNearest(targets, CENTER)
 
-        (move_x, move_y) = calcMouseMovePx(target[0] - CENTER[0], target[1] - CENTER[1])
+        (move_x, move_y) = calcMouseMovePx(target[0] - CENTER[0],
+                                           target[1] - CENTER[1])
+        draw.goto(draw.xcor() + move_x, draw.ycor() + move_y)
 
         interp = (
             move_x * move_speed_var.get(),
             move_y * move_speed_var.get(),
         )
 
-        win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, int(interp[0]), int(interp[1]))
+        win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, int(interp[0]),
+                             int(interp[1]))
 
 
 model_thread = None
@@ -130,8 +132,10 @@ model_thread = None
 def start():
     global running
     global state
+
     if running:
         return
+
     running = True
     state.config(text="Started")
 
@@ -154,12 +158,8 @@ def conf_change(e):
 
 
 def controls():
-    global move_speed_var
-    global head_var
-    global aim_threshold_var
-    global conf_var
-
-    tk.Label(text="[ Apex Yolov5 AI Predict ]", font=("Arial", 15)).pack(side="top")
+    tk.Label(text="[ Apex Yolov5 AI Predict ]",
+             font=("Arial", 15)).pack(side="top")
 
     tk.Label(text="Head Ratio").place(x=10, y=50)
     head = tk.Scale(
@@ -206,6 +206,12 @@ def controls():
     )
     model_conf.place(x=100, y=155)
 
+    global draw
+    canvas = tk.Canvas(width=CAPTURE_SIZE, height=CAPTURE_SIZE)
+    canvas.place(x=400, y=50)
+    draw = turtle.RawTurtle(canvas)
+    draw.speed(0)
+
     global state
     state = tk.Label(text="Stopped")
     state.place(x=10, y=210)
@@ -230,12 +236,6 @@ def on_closing():
     root.destroy()
 
 
-def main():
-    global root
-    root = createWindow()
-    root.mainloop()
-
-
 def createWindow():
     global head_var
     global move_speed_var
@@ -251,10 +251,16 @@ def createWindow():
     conf_var = tk.DoubleVar(value=CONF)
 
     window.title("Apex AI")
-    window.geometry("350x400")
+    window.geometry("900x500")
     window.resizable(False, False)
     controls()
     return window
+
+
+def main():
+    global root
+    root = createWindow()
+    root.mainloop()
 
 
 if __name__ == "__main__":
